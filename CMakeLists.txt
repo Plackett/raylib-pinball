@@ -37,6 +37,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Add source to this project's executable.
 add_executable (pinball "pinball.cpp" "pinball.h")
 
+add_custom_target(copy_assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CURRENT_BINARY_DIR}/assets
+)
+
+add_dependencies(pinball copy_assets)
+
 target_link_libraries(pinball raylib)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)

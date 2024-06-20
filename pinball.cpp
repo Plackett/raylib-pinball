@@ -32,6 +32,7 @@
 #define GLSL_VERSION            100
 #endif
 
+#define vec3addeq(v,w) { v.x += w.x; v.y += w.y; v.z += w.z; }
 
 int main()
 {
@@ -70,31 +71,50 @@ int main()
     Model flipper_L = LoadModel("./assets/flipper_L.glb");
     Model flipper_R = LoadModel("./assets/flipper_R.glb");
     Mesh boardMesh = GenMeshCube(40, 20, 1);
+    Mesh ballMesh = GenMeshSphere(0.4f, 32, 32);
 
     Model board = LoadModelFromMesh(boardMesh);
+    Model ball = LoadModelFromMesh(ballMesh);
+    Vector3 ballPosition = Vector3(0, 50, 0);
+    Vector3 ballVelocity = Vector3Zero();
+    Vector3 ballAcceleration = Vector3(0, -0.01f, 0);
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90+(BOARD_TILT*DEG2RAD), 0.0f, DEG2RAD * 90));
 
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
     flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
 
+    time_t startTime = 0;
+    time_t endTime = 0;
+    time_t tickTime = 0;
+
+    Ray groundRay{};
+    groundRay.direction = Vector3(0, -1, 0);
+    RayCollision hitLevel{};
+
     while (!WindowShouldClose())
-    {       
+    {
+        // DELTA TIME
+        // ----------
+        startTime = std::clock();
+
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
         {
-            flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90, 0.0f, DEG2RAD * -45.0f));
+            flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, DEG2RAD * -45.0f));
         }
         else
         {
-            flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90, 0.0f, 0.0f));
+            flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
         }
         if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))
         {
-            flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90, 0.0f, DEG2RAD * 45.0f));
+            flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, DEG2RAD * 45.0f));
         }
         else
         {
-            flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90, 0.0f, 0.0f));
+            flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
         }
+
+        camera.target = ballPosition;
 
         BeginDrawing();
 
@@ -105,15 +125,54 @@ int main()
         DrawModel(board, Vector3(0,0,-5), 1.0f, BROWN);
         DrawModel(flipper_L, Vector3(-3.0f, 1.0f, 12.0f),1,WHITE);
         DrawModel(flipper_R, Vector3(3.0f, 1.0f, 12.0f), 1, WHITE);
+        DrawModel(ball, ballPosition, 1, GRAY);
         EndShaderMode();
 
         EndMode3D();
 
         DrawText("Welcome to the pinball dimension!", 10, 40, 20, DARKGRAY);
+        DrawText(TextFormat("Current Board Tilt: %f", BOARD_TILT), 10, 60, 20, GREEN);
+        DrawText(TextFormat("Current TPS: %f", (float)tickTime), 10, 80, 20, RED);
 
         DrawFPS(10, 10);
 
         EndDrawing();
+        
+        // DELTA TIME PART 2
+        // -----------------
+        endTime = std::clock();
+        tickTime += endTime - startTime;
+
+        // PHYSICS
+        // -------
+        if ((float)tickTime >= 50)
+        {
+            groundRay.position = ballPosition;
+            hitLevel = GetRayCollisionMesh(groundRay, boardMesh, board.transform);
+            if (hitLevel.hit)
+            {
+                // 0.4 is radius of the ball
+                if (hitLevel.distance < INFINITY && hitLevel.distance <= 0.4f)
+                {
+                    // hit ground
+                    vec3addeq(ballVelocity, ballAcceleration);
+                    vec3addeq(ballPosition, ballVelocity);
+                }
+                else
+                {
+                    vec3addeq(ballVelocity, ballAcceleration);
+                    vec3addeq(ballPosition, ballVelocity);
+                }
+
+            }
+            else
+            {
+                vec3addeq(ballVelocity, ballAcceleration);
+                vec3addeq(ballPosition, ballVelocity);
+            }
+            tickTime = 0;
+        }
+
     }
 
     UnloadShader(shader);   // Unload shader

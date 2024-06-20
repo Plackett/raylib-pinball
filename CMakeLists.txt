@@ -27,7 +27,7 @@ FetchContent_Declare(
     GIT_PROGRESS TRUE
 )
 
-FetchContent_MakeAvailable(raylib)
+FetchContent_MakeAvailable(raylib )
 
 project ("pinball" CXX)
 

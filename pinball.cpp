@@ -78,17 +78,23 @@ int main()
     Model flipper_R = LoadModel("./assets/flipper_R.glb");
     Mesh boardMesh = GenMeshCube(40, 20, 1);
     Mesh ballMesh = GenMeshSphere(0.4f, 32, 32);
+    Mesh Arrow = GenMeshCone(1, 3, 32);
+    Mesh backWallMesh = GenMeshCube(20, 2, 2);
 
     Model board = LoadModelFromMesh(boardMesh);
     Model ball = LoadModelFromMesh(ballMesh);
-    Vector3 ballPosition = Vector3(0, 25, 0);
+    Model backWall = LoadModelFromMesh(backWallMesh);
+    Vector3 ballPosition = Vector3(1, 5, 0);
     Vector3 ballVelocity = Vector3Zero();
     Vector3 ballAcceleration = Vector3(0, -1.0f, 0);
     Vector3 ballProjection = Vector3Zero();
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
-
+    backWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * BOARD_TILT, 0.0f, 0.0f));
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
+    backWall.transform = MatrixTranslate(0, -1, 16);
+    flipper_L.transform = MatrixTranslate(-3, -1, 12);
+    flipper_R.transform = MatrixTranslate(3, -1, 12);
 
     time_t startTime = 0;
     time_t endTime = 0;
@@ -97,6 +103,11 @@ int main()
     Ray groundRay{};
     groundRay.direction = Vector3(0, -1, 0);
     RayCollision hitLevel{};
+    Ray ZRay{};
+    ZRay.direction = Vector3(0, 0, cos(DEG2RAD*6.5f));
+    RayCollision hitBack{};
+    RayCollision hitFlipperL{};
+    RayCollision hitFlipperR{};
     time_t dropTime = 0;
     bool dropped = false;
 
@@ -129,8 +140,9 @@ int main()
         BeginMode3D(camera);
         BeginShaderMode(shader);
         DrawModel(board, Vector3(0,0,-5), 1.0f, BROWN);
-        DrawModel(flipper_L, Vector3(-3.0f, 1.0f, 12.0f),1,WHITE);
-        DrawModel(flipper_R, Vector3(3.0f, 1.0f, 12.0f), 1, WHITE);
+        DrawModel(backWall, Vector3Zero(), 1, GRAY);
+        DrawModel(flipper_L, Vector3(-3.0f, -1.0f, 12.0f),1,WHITE);
+        DrawModel(flipper_R, Vector3(3.0f, -1.0f, 12.0f), 1, WHITE);
         DrawModel(ball, ballPosition, 1, GRAY);
         EndShaderMode();
 
@@ -146,27 +158,56 @@ int main()
         // DELTA TIME PART 2
         // -----------------
         endTime = std::clock();
-        deltaTime = endTime - startTime;
+        deltaTime = GetFrameTime();
 
         // PHYSICS
         // -------
         printf("e");
         groundRay.position = ballPosition;
         hitLevel = GetRayCollisionMesh(groundRay, boardMesh, board.transform);
+        ZRay.position = ballPosition;
+        hitBack = GetRayCollisionMesh(ZRay, backWallMesh, backWall.transform);
+        hitFlipperL = GetRayCollisionMesh(ZRay, flipper_L.meshes[0], flipper_L.transform);
+        hitFlipperR = GetRayCollisionMesh(ZRay, flipper_R.meshes[0], flipper_R.transform);
+        if (hitFlipperL.hit)
+        {
+            // 0.4 is radius of the ball
+            if (hitFlipperL.distance <= 1.0f)
+            {
+                ballProjection = Vector3Project(ballVelocity, hitFlipperL.normal);
+                // THEORY: projection - (projection - original)
+                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection), ballProjection);
+            }
+        }
+        if (hitFlipperR.hit)
+        {
+            // 0.4 is radius of the ball
+            if (hitFlipperR.distance <= 1.0f)
+            {
+                ballProjection = Vector3Project(ballVelocity, hitFlipperR.normal);
+                // THEORY: projection - (projection - original)
+                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection), ballProjection);
+            }
+        }
+        if (hitBack.hit)
+        {
+            // 0.4 is radius of the ball
+            if (hitBack.distance <= 1.0f)
+            {
+                ballProjection = Vector3Project(ballVelocity, hitBack.normal);
+                // THEORY: projection - (projection - original)
+                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection), ballProjection);
+            }
+        }
         if (hitLevel.hit)
         {
             // 0.4 is radius of the ball
             if (hitLevel.distance <= 1.0f)
             {
-                // EVAN'S THEORY: projection - (projection - original)
                 printf("Collided: %d", std::clock() - dropTime);
-                // TEST THEORY: hit ground, apply normal vector to it
-                ballVelocity = vec3divf(hitLevel.normal,16);
-                //ballProjection = Vector3Project(ballVelocity, hitLevel.normal);
-                //ballVelocity = Vector3(ballProjection.x - (ballProjection.x - ballVelocity.x),ballProjection.y - (ballProjection.y - ballVelocity.y), ballProjection.z - (ballProjection.z - ballVelocity.z));
-                // velocity += acceleration / deltaTime
-                vec3addeq(ballVelocity, vec3divf(ballAcceleration,deltaTime));
-                vec3addeq(ballPosition, ballVelocity);
+                ballProjection = Vector3Project(ballVelocity, hitLevel.normal);
+                // THEORY: projection - (projection - original)
+                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection),ballProjection);
             }
             else
             {
@@ -175,12 +216,11 @@ int main()
                     dropTime = std::clock();
                     dropped = true;
                 }
-                // velocity += acceleration / deltaTime
-                vec3addeq(ballVelocity, vec3divf(ballAcceleration, deltaTime));
-                vec3addeq(ballPosition, ballVelocity);
             }
-
         }
+        // velocity += acceleration / deltaTime
+        vec3addeq(ballVelocity, vec3divf(ballAcceleration, 32));
+        vec3addeq(ballPosition, ballVelocity);
         if (ballVelocity.x > 10)
         {
             ballVelocity.x = 10;

@@ -37,6 +37,8 @@
 #define vec3mulfeq(v,w) { v.x *= w; v.y *= w; v.z *= w; }
 #define vec3divfeq(v,w) { v.x /= w; v.y /= w; v.z /= w; }
 
+Vector3 vec3divf(Vector3 v, float w) { return Vector3(v.x/w,v.y/w,v.z/w); }
+
 int main()
 {
     time_t beginTime = std::clock();
@@ -99,8 +101,7 @@ int main()
     groundRay.direction = Vector3(0, -1, 0);
     RayCollision hitLevel{};
     time_t dropTime = 0;
-    bool collided = false;
-    time_t collTime = 0;
+    bool dropped = false;
 
     while (!WindowShouldClose())
     {
@@ -160,21 +161,22 @@ int main()
             // 0.4 is radius of the ball
             if (hitLevel.distance <= 1.0f)
             {
-                printf("Collided: %d", std::clock() - collTime);
-                // hit ground
-                ballVelocity = Vector3(0, 0.11320321*0.5, 0.99357186*0.5);
-                vec3divfeq(ballVelocity, deltaTime/128);
+                printf("Collided: %d", std::clock() - dropTime);
+                // hit ground, apply cos(6.5deg),sin(6.5deg) to it
+                ballVelocity = Vector3(0, cos(DEG2RAD*6.5f)*0.05, sin(DEG2RAD * 6.5f)*0.05);
+                // velocity += acceleration / deltaTime
+                vec3addeq(ballVelocity, vec3divf(ballAcceleration,deltaTime));
                 vec3addeq(ballPosition, ballVelocity);
             }
             else
             {
-                if (!collided)
+                if (!dropped)
                 {
-                    collTime = std::clock();
-                    collided = true;
+                    dropTime = std::clock();
+                    dropped = true;
                 }
-                vec3addeq(ballVelocity, ballAcceleration);
-                vec3divfeq(ballVelocity, deltaTime/128);
+                // velocity += acceleration / deltaTime
+                vec3addeq(ballVelocity, vec3divf(ballAcceleration, deltaTime));
                 vec3addeq(ballPosition, ballVelocity);
             }
 

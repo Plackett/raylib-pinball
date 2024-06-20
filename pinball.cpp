@@ -84,11 +84,8 @@ int main()
     Vector3 ballPosition = Vector3(0, 25, 0);
     Vector3 ballVelocity = Vector3Zero();
     Vector3 ballAcceleration = Vector3(0, -1.0f, 0);
+    Vector3 ballProjection = Vector3Zero();
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
-    for (size_t i = 0; i < board.meshes[0].vertexCount; i += 3)
-    {
-        printf("Vert: X:%f, Y:%f, Z:%f\n", board.meshes[0].vertices[i], board.meshes[0].vertices[i + 1], board.meshes[0].vertices[i + 2]);
-    }
 
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
@@ -161,9 +158,12 @@ int main()
             // 0.4 is radius of the ball
             if (hitLevel.distance <= 1.0f)
             {
+                // EVAN'S THEORY: projection - (projection - original)
                 printf("Collided: %d", std::clock() - dropTime);
-                // hit ground, apply cos(6.5deg),sin(6.5deg) to it
-                ballVelocity = Vector3(0, cos(DEG2RAD*6.5f)*0.05, sin(DEG2RAD * 6.5f)*0.05);
+                // TEST THEORY: hit ground, apply normal vector to it
+                ballVelocity = vec3divf(hitLevel.normal,16);
+                //ballProjection = Vector3Project(ballVelocity, hitLevel.normal);
+                //ballVelocity = Vector3(ballProjection.x - (ballProjection.x - ballVelocity.x),ballProjection.y - (ballProjection.y - ballVelocity.y), ballProjection.z - (ballProjection.z - ballVelocity.z));
                 // velocity += acceleration / deltaTime
                 vec3addeq(ballVelocity, vec3divf(ballAcceleration,deltaTime));
                 vec3addeq(ballPosition, ballVelocity);

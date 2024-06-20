@@ -25,6 +25,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "out/build/x64-debug/_deps/raylib-src/examples/shaders/rlights.h"
+#include <vector>
 
 #if defined(PLATFORM_DESKTOP)
 #define GLSL_VERSION            330
@@ -33,9 +34,12 @@
 #endif
 
 #define vec3addeq(v,w) { v.x += w.x; v.y += w.y; v.z += w.z; }
+#define vec3mulfeq(v,w) { v.x *= w; v.y *= w; v.z *= w; }
+#define vec3divfeq(v,w) { v.x /= w; v.y /= w; v.z /= w; }
 
 int main()
 {
+    time_t beginTime = std::clock();
     SetConfigFlags(FLAG_MSAA_4X_HINT);  // Enable Multi Sampling Anti Aliasing 4x (if available)
     InitWindow(800, 600, "Pinball Game :D");
 
@@ -75,27 +79,31 @@ int main()
 
     Model board = LoadModelFromMesh(boardMesh);
     Model ball = LoadModelFromMesh(ballMesh);
-    Vector3 ballPosition = Vector3(0, 50, 0);
+    Vector3 ballPosition = Vector3(0, 25, 0);
     Vector3 ballVelocity = Vector3Zero();
-    Vector3 ballAcceleration = Vector3(0, -0.01f, 0);
-    board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90+(BOARD_TILT*DEG2RAD), 0.0f, DEG2RAD * 90));
+    Vector3 ballAcceleration = Vector3(0, -1.0f, 0);
+    board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
+    for (size_t i = 0; i < board.meshes[0].vertexCount; i += 3)
+    {
+        printf("Vert: X:%f, Y:%f, Z:%f\n", board.meshes[0].vertices[i], board.meshes[0].vertices[i + 1], board.meshes[0].vertices[i + 2]);
+    }
 
-    flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
-    flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
+    flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
+    flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
 
     time_t startTime = 0;
     time_t endTime = 0;
-    time_t tickTime = 0;
+    time_t deltaTime = 0;
 
     Ray groundRay{};
     groundRay.direction = Vector3(0, -1, 0);
     RayCollision hitLevel{};
+    time_t dropTime = 0;
+    bool collided = false;
+    time_t collTime = 0;
 
     while (!WindowShouldClose())
     {
-        // DELTA TIME
-        // ----------
-        startTime = std::clock();
 
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
         {
@@ -132,7 +140,6 @@ int main()
 
         DrawText("Welcome to the pinball dimension!", 10, 40, 20, DARKGRAY);
         DrawText(TextFormat("Current Board Tilt: %f", BOARD_TILT), 10, 60, 20, GREEN);
-        DrawText(TextFormat("Current TPS: %f", (float)tickTime), 10, 80, 20, RED);
 
         DrawFPS(10, 10);
 
@@ -141,36 +148,48 @@ int main()
         // DELTA TIME PART 2
         // -----------------
         endTime = std::clock();
-        tickTime += endTime - startTime;
+        deltaTime = endTime - startTime;
 
         // PHYSICS
         // -------
-        if ((float)tickTime >= 50)
+        printf("e");
+        groundRay.position = ballPosition;
+        hitLevel = GetRayCollisionMesh(groundRay, boardMesh, board.transform);
+        if (hitLevel.hit)
         {
-            groundRay.position = ballPosition;
-            hitLevel = GetRayCollisionMesh(groundRay, boardMesh, board.transform);
-            if (hitLevel.hit)
+            // 0.4 is radius of the ball
+            if (hitLevel.distance <= 1.0f)
             {
-                // 0.4 is radius of the ball
-                if (hitLevel.distance < INFINITY && hitLevel.distance <= 0.4f)
-                {
-                    // hit ground
-                    vec3addeq(ballVelocity, ballAcceleration);
-                    vec3addeq(ballPosition, ballVelocity);
-                }
-                else
-                {
-                    vec3addeq(ballVelocity, ballAcceleration);
-                    vec3addeq(ballPosition, ballVelocity);
-                }
-
+                printf("Collided: %d", std::clock() - collTime);
+                // hit ground
+                ballVelocity = Vector3(0, 0.11320321*0.5, 0.99357186*0.5);
+                vec3divfeq(ballVelocity, deltaTime/128);
+                vec3addeq(ballPosition, ballVelocity);
             }
             else
             {
+                if (!collided)
+                {
+                    collTime = std::clock();
+                    collided = true;
+                }
                 vec3addeq(ballVelocity, ballAcceleration);
+                vec3divfeq(ballVelocity, deltaTime/128);
                 vec3addeq(ballPosition, ballVelocity);
             }
-            tickTime = 0;
+
+        }
+        if (ballVelocity.x > 10)
+        {
+            ballVelocity.x = 10;
+        }
+        if (ballVelocity.y > 10)
+        {
+            ballVelocity.y = 10;
+        }
+        if (ballVelocity.z > 10)
+        {
+            ballVelocity.z = 10;
         }
 
     }
@@ -178,6 +197,5 @@ int main()
     UnloadShader(shader);   // Unload shader
 
     CloseWindow();
-
     return 0;
 }

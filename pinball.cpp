@@ -74,11 +74,15 @@ int main()
     lights[2] = CreateLight(LIGHT_POINT, Vector3( - 2, 1, 2 ), Vector3Zero(), GREEN, shader);
     lights[3] = CreateLight(LIGHT_POINT, Vector3( 2, 1, -2 ), Vector3Zero(), BLUE, shader);
 
+    // scoring setup
+    float score = 0;
+
     // mesh creation
     Mesh boardMesh = GenMeshCube(40, 20, 1);
     Mesh ballMesh = GenMeshSphere(0.4f, 32, 32);
     Mesh Arrow = GenMeshCone(1, 3, 32);
     Mesh backWallMesh = GenMeshCube(20, 2, 2);
+    Mesh wallMesh = GenMeshCube(1, 2, 40);
 
     // model creation
     Model flipper_L = LoadModel("./assets/flipper_L.glb");
@@ -86,11 +90,14 @@ int main()
     Model board = LoadModelFromMesh(boardMesh);
     Model ball = LoadModelFromMesh(ballMesh);
     Model backWall = LoadModelFromMesh(backWallMesh);
+    Model frontWall = LoadModelFromMesh(backWallMesh);
+    Model leftWall = LoadModelFromMesh(wallMesh);
+    Model rightWall = LoadModelFromMesh(wallMesh);
 
     // ball physics
     Vector3 ballPosition = Vector3(1, 5, 0);
     Vector3 ballVelocity = Vector3Zero();
-    Vector3 ballAcceleration = Vector3(0, -0.001f, 0);
+    Vector3 ballAcceleration = Vector3(0, -0.005f, 0);
     Vector3 ballRotation = Vector3Zero();
     Vector3 ballAngularVelocity = Vector3Zero();
     Vector3 ballProjection = Vector3Zero();
@@ -99,12 +106,17 @@ int main()
     float lFlipAngle = 0;
     float rFlipAngle = 0;
 
-    // rotation
+    // rotation and positioning
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
     backWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * BOARD_TILT, 0.0f, 0.0f));
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     backWall.transform = MatrixTranslate(0, -1, 16);
+    frontWall.transform = MatrixTranslate(0, 4, -20);
+    leftWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (BOARD_TILT), 0, 0));
+    leftWall.transform = MatrixMultiply(leftWall.transform,MatrixTranslate(-10, 0, -1));
+    rightWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (BOARD_TILT), 0, 0));
+    rightWall.transform = MatrixMultiply(leftWall.transform, MatrixTranslate(20, 0, -1));
     flipper_L.transform = MatrixTranslate(-1, -1, 0);
     flipper_R.transform = MatrixTranslate(1, -1, 0);
 
@@ -121,8 +133,14 @@ int main()
     Ray groundRay{};
     groundRay.direction = Vector3(0, -1, 0);
     Ray ZRay{};
-    ZRay.direction = Vector3(0, 0, cos(DEG2RAD*6.5f));
-    std::vector<RayCollision> collisions{};
+    ZRay.direction = Vector3(0, 0, cos(DEG2RAD * 6.5f));
+    Ray NegZRay{};
+    ZRay.direction = Vector3(0, 0, -cos(DEG2RAD * 6.5f));
+    Ray XRay{};
+    XRay.direction = Vector3(1, 0, 0);
+    Ray NegXRay{};
+    NegXRay.direction = Vector3(-1, 0, 0);
+    static RayCollision collisions[7];
     time_t dropTime = 0;
     bool collided = false;
 
@@ -197,6 +215,9 @@ int main()
         BeginShaderMode(shader);
         DrawModel(board, Vector3(0,0,-5), 1.0f, BROWN);
         DrawModel(backWall, Vector3Zero(), 1, GRAY);
+        DrawModel(frontWall, Vector3Zero(), 1, GRAY);
+        DrawModel(leftWall, Vector3Zero(), 1, GRAY);
+        DrawModel(rightWall, Vector3Zero(), 1, GRAY);
         DrawModel(flipper_L, Vector3Zero(),1,WHITE);
         DrawModel(flipper_R, Vector3Zero(), 1, WHITE);
         DrawModel(ball, ballPosition, 1, GRAY);
@@ -209,6 +230,7 @@ int main()
         DrawText("Welcome to the pinball dimension!", 10, 40, 20, DARKGRAY);
         DrawText(TextFormat("Press [A/D] or [Left/Right Arrow] to operate flippers"), 10, 60, 20, GREEN);
         DrawText("Press [R] to reset ball position", 10, 80, 20, BLUE);
+        DrawText(TextFormat("Score: %f",score), 10, 100, 20, GOLD);
         DrawFPS(10, 10);
 
         // complete drawing close
@@ -224,13 +246,18 @@ int main()
         // update ray positions
         groundRay.position = ballPosition;
         ZRay.position = ballPosition;
+        NegZRay.position = ballPosition;
+        XRay.position = ballPosition;
+        NegXRay.position = ballPosition;
 
         // check all collisions
-        collisions = {};
-        collisions.push_back(GetRayCollisionMesh(groundRay, boardMesh, board.transform));
-        collisions.push_back(GetRayCollisionMesh(ZRay, backWallMesh, backWall.transform));
-        collisions.push_back(GetRayCollisionMesh(ZRay, flipper_L.meshes[0], flipper_L.transform));
-        collisions.push_back(GetRayCollisionMesh(ZRay, flipper_R.meshes[0], flipper_R.transform));
+        collisions[0] = GetRayCollisionMesh(groundRay, boardMesh, board.transform);
+        collisions[1] = GetRayCollisionMesh(ZRay, backWallMesh, backWall.transform);
+        collisions[2] = GetRayCollisionMesh(ZRay, flipper_L.meshes[0], flipper_L.transform);
+        collisions[3] = GetRayCollisionMesh(ZRay, flipper_R.meshes[0], flipper_R.transform);
+        collisions[4] = GetRayCollisionMesh(NegZRay, backWallMesh, frontWall.transform);
+        collisions[5] = GetRayCollisionMesh(XRay, wallMesh, rightWall.transform);
+        collisions[6] = GetRayCollisionMesh(NegXRay, wallMesh, leftWall.transform);
 
         // cancel gravity if touching object
         if (!collided)
@@ -243,40 +270,47 @@ int main()
             collided = false;
         }
         // apply physics based on collision
-        for (const auto& collision : collisions)
+        for (int i = 0; i < 7; ++i)
         {
             // 0.4 is radius of the ball
-            if (collision.hit && collision.distance <= 0.4f)
+            if (collisions[i].hit && collisions[i].distance <= 0.4f)
             {
                 // Calculate the new position after collision
-                ballPosition = Vector3Add(ballPosition, Vector3Scale(collision.normal, 0.4f - collision.distance));
+                ballPosition = Vector3Add(ballPosition, Vector3Scale(collisions[i].normal, 0.4f - collisions[i].distance));
                 // tell it to not have gravity while resting on object
                 collided = true;
                 // calculate reflected velocity (projection - (projection - velocity) right?
-                ballVelocity = Vector3Reflect(ballVelocity, collision.normal);
+                ballVelocity = Vector3Reflect(ballVelocity, collisions[i].normal);
+                // scale vertical velocity so it doesn't fly out of the board
                 ballVelocity.y *= 0.8f;
-                vec3mulfeq(ballVelocity, 0.8f);
+                // make board slippy
+                if (i == 0)
+                {
+                    ballVelocity.z *= 1.2f;
+                    ballVelocity.x *= 1.2f;
+                }
+                // make flippers bouncy
+                if (i == 2 || i == 3)
+                {
+                    vec3mulfeq(ballVelocity, 1.5f);
+                }
+                else
+                {
+                    vec3mulfeq(ballVelocity, 0.8f);
+                }
             }
         }
         // cap velocity
-        if (ballVelocity.x > 10)
+        if (Vector3Length(ballVelocity) >= 10)
         {
-            ballVelocity.x = 10;
-        }
-        if (ballVelocity.y > 10)
-        {
-            ballVelocity.y = 10;
-        }
-        if (ballVelocity.z > 10)
-        {
-            ballVelocity.z = 10;
+            ballVelocity = Vector3Scale(Vector3Normalize(ballVelocity),10);
         }
         // Update ball rotation based on velocity, angular velocity = linear velocity / radius
         ballAngularVelocity = Vector3(Vector3Length(ballVelocity) / 0.4f, Vector3Length(ballVelocity) / 0.4f, Vector3Length(ballVelocity) / 0.4f);
         vec3addeq(ballRotation, ballAngularVelocity);
         ball.transform = MatrixRotateXYZ(ballRotation);
         // finally add velocity to overall position of ball
-        vec3addeq(ballPosition, Vector3Scale(ballVelocity,deltaTime));
+        vec3addeq(ballPosition, Vector3Scale(ballVelocity,deltaTime/16));
 
     }
 

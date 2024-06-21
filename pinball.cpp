@@ -49,7 +49,7 @@ int main()
 
     // Define the camera to look into our 3d world
     Camera3D camera = { 0 };
-    camera.position = Vector3{ 0.0f, 30.0f, 30.0f };  // Camera position
+    camera.position = Vector3{ 30.0f, 0.0f, 0.0f };  // Camera position
     camera.target = Vector3{ 0.0f, 0.0f, 0.0f };      // Camera looking at point
     camera.up = Vector3{ 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
     camera.fovy = 45.0f;                                // Camera field-of-view Y
@@ -92,6 +92,10 @@ int main()
     Vector3 ballVelocity = Vector3Zero();
     Vector3 ballAcceleration = Vector3(0, -1.0f, 0);
     Vector3 ballProjection = Vector3Zero();
+    Vector3 lFlipPosition = Vector3(-3, -1, 12);
+    Vector3 rFlipPosition = Vector3(3, -1, 12);
+    float lFlipAngle = 0;
+    float rFlipAngle = 0;
 
     // rotation
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
@@ -99,8 +103,8 @@ int main()
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     backWall.transform = MatrixTranslate(0, -1, 16);
-    flipper_L.transform = MatrixTranslate(-3, -1, 12);
-    flipper_R.transform = MatrixTranslate(3, -1, 12);
+    flipper_L.transform = MatrixTranslate(-1, -1, 0);
+    flipper_R.transform = MatrixTranslate(1, -1, 0);
 
     // ball texturing
     Texture2D ballTexture = LoadTexture("assets/ball.png");    // Load ball texture
@@ -135,20 +139,52 @@ int main()
         // flipper controls
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
         {
-            flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, DEG2RAD * -45.0f));
+            if (lFlipAngle > -45*DEG2RAD)
+            {
+                lFlipAngle -= 0.1;
+            }
+            else
+            {
+                lFlipAngle = -45*DEG2RAD;
+            }
         }
         else
         {
-            flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
+            if (lFlipAngle < 0)
+            {
+                lFlipAngle += 0.1;
+            }
+            else
+            {
+                lFlipAngle = 0;
+            }
         }
         if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT))
         {
-            flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, DEG2RAD * 45.0f));
+            if (rFlipAngle < 45*DEG2RAD)
+            {
+                rFlipAngle += 0.1;
+            }
+            else
+            {
+                rFlipAngle = 45 * DEG2RAD;
+            }
         }
         else
         {
-            flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
+            if (rFlipAngle > 0)
+            {
+                rFlipAngle -= 0.1;
+            }
+            else
+            {
+                rFlipAngle = 0;
+            }
         }
+        flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, lFlipAngle));
+        flipper_L.transform = MatrixMultiply(flipper_L.transform, MatrixTranslate(-3, -0.5f, 12));
+        flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, rFlipAngle));
+        flipper_R.transform = MatrixMultiply(flipper_R.transform, MatrixTranslate(3, -0.5f, 12));
 
         // make camera follow ball
         camera.target = ballPosition;
@@ -162,8 +198,8 @@ int main()
         BeginShaderMode(shader);
         DrawModel(board, Vector3(0,0,-5), 1.0f, BROWN);
         DrawModel(backWall, Vector3Zero(), 1, GRAY);
-        DrawModel(flipper_L, Vector3(-3.0f, -1.0f, 12.0f),1,WHITE);
-        DrawModel(flipper_R, Vector3(3.0f, -1.0f, 12.0f), 1, WHITE);
+        DrawModel(flipper_L, Vector3Zero(),1,WHITE);
+        DrawModel(flipper_R, Vector3Zero(), 1, WHITE);
         DrawModel(ball, ballPosition, 1, GRAY);
 
         // 3d drawing close

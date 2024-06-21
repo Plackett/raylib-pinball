@@ -74,20 +74,26 @@ int main()
     lights[2] = CreateLight(LIGHT_POINT, Vector3( - 2, 1, 2 ), Vector3Zero(), GREEN, shader);
     lights[3] = CreateLight(LIGHT_POINT, Vector3( 2, 1, -2 ), Vector3Zero(), BLUE, shader);
 
-    Model flipper_L = LoadModel("./assets/flipper_L.glb");
-    Model flipper_R = LoadModel("./assets/flipper_R.glb");
+    // mesh creation
     Mesh boardMesh = GenMeshCube(40, 20, 1);
     Mesh ballMesh = GenMeshSphere(0.4f, 32, 32);
     Mesh Arrow = GenMeshCone(1, 3, 32);
     Mesh backWallMesh = GenMeshCube(20, 2, 2);
 
+    // model creation
+    Model flipper_L = LoadModel("./assets/flipper_L.glb");
+    Model flipper_R = LoadModel("./assets/flipper_R.glb");
     Model board = LoadModelFromMesh(boardMesh);
     Model ball = LoadModelFromMesh(ballMesh);
     Model backWall = LoadModelFromMesh(backWallMesh);
-    Vector3 ballPosition = Vector3(1, 5, 0);
+
+    // ball physics
+    Vector3 ballPosition = Vector3(1, 2, 0);
     Vector3 ballVelocity = Vector3Zero();
     Vector3 ballAcceleration = Vector3(0, -1.0f, 0);
     Vector3 ballProjection = Vector3Zero();
+
+    // rotation
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
     backWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * BOARD_TILT, 0.0f, 0.0f));
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
@@ -96,24 +102,37 @@ int main()
     flipper_L.transform = MatrixTranslate(-3, -1, 12);
     flipper_R.transform = MatrixTranslate(3, -1, 12);
 
+    // ball texturing
+    Texture2D ballTexture = LoadTexture("assets/ball.png");    // Load ball texture
+    ball.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = ballTexture;
+
+    // timing utils
     time_t startTime = 0;
     time_t endTime = 0;
     time_t deltaTime = 0;
 
+    // raycast creation
     Ray groundRay{};
     groundRay.direction = Vector3(0, -1, 0);
-    RayCollision hitLevel{};
     Ray ZRay{};
     ZRay.direction = Vector3(0, 0, cos(DEG2RAD*6.5f));
-    RayCollision hitBack{};
-    RayCollision hitFlipperL{};
-    RayCollision hitFlipperR{};
+    std::vector<RayCollision> collisions{};
     time_t dropTime = 0;
-    bool dropped = false;
+    bool collided = false;
 
+    // MAIN WINDOW LOOP
     while (!WindowShouldClose())
     {
+        // DELTA TIME PART ONE
+        startTime = std::clock();
 
+        // reset button
+        if (IsKeyDown(KEY_R))
+        {
+            ballPosition = Vector3(-1, 2, 0);
+            ballVelocity = Vector3Zero();
+        }
+        // flipper controls
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
         {
             flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, DEG2RAD * -45.0f));
@@ -131,12 +150,14 @@ int main()
             flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * 90 + (BOARD_TILT * DEG2RAD), 0.0f, 0.0f));
         }
 
+        // make camera follow ball
         camera.target = ballPosition;
 
+        // drawing setup
         BeginDrawing();
-
         ClearBackground(RAYWHITE);
-
+        
+        // draw
         BeginMode3D(camera);
         BeginShaderMode(shader);
         DrawModel(board, Vector3(0,0,-5), 1.0f, BROWN);
@@ -144,83 +165,62 @@ int main()
         DrawModel(flipper_L, Vector3(-3.0f, -1.0f, 12.0f),1,WHITE);
         DrawModel(flipper_R, Vector3(3.0f, -1.0f, 12.0f), 1, WHITE);
         DrawModel(ball, ballPosition, 1, GRAY);
-        EndShaderMode();
 
+        // 3d drawing close
+        EndShaderMode();
         EndMode3D();
 
+        // DEBUG INFO
         DrawText("Welcome to the pinball dimension!", 10, 40, 20, DARKGRAY);
-        DrawText(TextFormat("Current Board Tilt: %f", BOARD_TILT), 10, 60, 20, GREEN);
-
+        DrawText(TextFormat("Press [A/D] or [Left/Right Arrow] to operate flippers"), 10, 60, 20, GREEN);
+        DrawText("Press [R] to reset ball position", 10, 80, 20, BLUE);
         DrawFPS(10, 10);
 
+        // complete drawing close
         EndDrawing();
         
         // DELTA TIME PART 2
-        // -----------------
         endTime = std::clock();
-        deltaTime = GetFrameTime();
+        deltaTime = endTime - startTime;
 
-        // PHYSICS
-        // -------
-        printf("e");
+        // PHYSICS FUNCTIONS
+        // -----------------
+       
+        // update ray positions
         groundRay.position = ballPosition;
-        hitLevel = GetRayCollisionMesh(groundRay, boardMesh, board.transform);
         ZRay.position = ballPosition;
-        hitBack = GetRayCollisionMesh(ZRay, backWallMesh, backWall.transform);
-        hitFlipperL = GetRayCollisionMesh(ZRay, flipper_L.meshes[0], flipper_L.transform);
-        hitFlipperR = GetRayCollisionMesh(ZRay, flipper_R.meshes[0], flipper_R.transform);
-        if (hitFlipperL.hit)
+
+        // check all collisions
+        collisions = {};
+        collisions.push_back(GetRayCollisionMesh(groundRay, boardMesh, board.transform));
+        collisions.push_back(GetRayCollisionMesh(ZRay, backWallMesh, backWall.transform));
+        collisions.push_back(GetRayCollisionMesh(ZRay, flipper_L.meshes[0], flipper_L.transform));
+        collisions.push_back(GetRayCollisionMesh(ZRay, flipper_R.meshes[0], flipper_R.transform));
+
+        // cancel gravity if touching object
+        if (!collided)
         {
-            // 0.4 is radius of the ball
-            if (hitFlipperL.distance <= 1.0f)
-            {
-                ballProjection = Vector3Project(ballVelocity, hitFlipperL.normal);
-                // THEORY: projection - (projection - original)
-                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection), ballProjection);
-            }
+            // velocity += acceleration / deltaTime
+            vec3addeq(ballVelocity, vec3divf(ballAcceleration, 32));
         }
-        if (hitFlipperR.hit)
+        else
         {
-            // 0.4 is radius of the ball
-            if (hitFlipperR.distance <= 1.0f)
-            {
-                ballProjection = Vector3Project(ballVelocity, hitFlipperR.normal);
-                // THEORY: projection - (projection - original)
-                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection), ballProjection);
-            }
+            collided = false;
         }
-        if (hitBack.hit)
+        // apply physics based on collision
+        for (const auto& collision : collisions)
         {
             // 0.4 is radius of the ball
-            if (hitBack.distance <= 1.0f)
+            if (collision.hit && collision.distance <= 0.4f)
             {
-                ballProjection = Vector3Project(ballVelocity, hitBack.normal);
-                // THEORY: projection - (projection - original)
-                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection), ballProjection);
-            }
-        }
-        if (hitLevel.hit)
-        {
-            // 0.4 is radius of the ball
-            if (hitLevel.distance <= 1.0f)
-            {
-                printf("Collided: %d", std::clock() - dropTime);
-                ballProjection = Vector3Project(ballVelocity, hitLevel.normal);
+                collided = true;
+                ballProjection = Vector3Project(ballVelocity, collision.normal);
                 // THEORY: projection - (projection - original)
                 ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection),ballProjection);
-            }
-            else
-            {
-                if (!dropped)
-                {
-                    dropTime = std::clock();
-                    dropped = true;
-                }
+                vec3mulfeq(ballVelocity, 0.8f);
             }
         }
-        // velocity += acceleration / deltaTime
-        vec3addeq(ballVelocity, vec3divf(ballAcceleration, 32));
-        vec3addeq(ballPosition, ballVelocity);
+        // cap velocity
         if (ballVelocity.x > 10)
         {
             ballVelocity.x = 10;
@@ -233,6 +233,8 @@ int main()
         {
             ballVelocity.z = 10;
         }
+        // finally add velocity to overall position of ball
+        vec3addeq(ballPosition, ballVelocity);
 
     }
 

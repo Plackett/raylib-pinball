@@ -49,7 +49,7 @@ int main()
 
     // Define the camera to look into our 3d world
     Camera3D camera = { 0 };
-    camera.position = Vector3{ 30.0f, 0.0f, 0.0f };  // Camera position
+    camera.position = Vector3{ 0.0f, 30.0f, 30.0f };  // Camera position
     camera.target = Vector3{ 0.0f, 0.0f, 0.0f };      // Camera looking at point
     camera.up = Vector3{ 0.0f, 1.0f, 0.0f };          // Camera up vector (rotation towards target)
     camera.fovy = 45.0f;                                // Camera field-of-view Y
@@ -88,9 +88,11 @@ int main()
     Model backWall = LoadModelFromMesh(backWallMesh);
 
     // ball physics
-    Vector3 ballPosition = Vector3(1, 2, 0);
+    Vector3 ballPosition = Vector3(1, 5, 0);
     Vector3 ballVelocity = Vector3Zero();
-    Vector3 ballAcceleration = Vector3(0, -1.0f, 0);
+    Vector3 ballAcceleration = Vector3(0, -0.001f, 0);
+    Vector3 ballRotation = Vector3Zero();
+    Vector3 ballAngularVelocity = Vector3Zero();
     Vector3 ballProjection = Vector3Zero();
     Vector3 lFlipPosition = Vector3(-3, -1, 12);
     Vector3 rFlipPosition = Vector3(3, -1, 12);
@@ -133,7 +135,7 @@ int main()
         // reset button
         if (IsKeyDown(KEY_R))
         {
-            ballPosition = Vector3(-1, 2, 0);
+            ballPosition = Vector3(-1, 1, 0);
             ballVelocity = Vector3Zero();
         }
         // flipper controls
@@ -182,12 +184,9 @@ int main()
             }
         }
         flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, lFlipAngle));
-        flipper_L.transform = MatrixMultiply(flipper_L.transform, MatrixTranslate(-3, -0.5f, 12));
+        flipper_L.transform = MatrixMultiply(flipper_L.transform, MatrixTranslate(-3, 0, 12));
         flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, rFlipAngle));
-        flipper_R.transform = MatrixMultiply(flipper_R.transform, MatrixTranslate(3, -0.5f, 12));
-
-        // make camera follow ball
-        camera.target = ballPosition;
+        flipper_R.transform = MatrixMultiply(flipper_R.transform, MatrixTranslate(3, 0, 12));
 
         // drawing setup
         BeginDrawing();
@@ -236,8 +235,8 @@ int main()
         // cancel gravity if touching object
         if (!collided)
         {
-            // velocity += acceleration / deltaTime
-            vec3addeq(ballVelocity, vec3divf(ballAcceleration, 32));
+            // velocity += acceleration
+            vec3addeq(ballVelocity, ballAcceleration);
         }
         else
         {
@@ -249,10 +248,13 @@ int main()
             // 0.4 is radius of the ball
             if (collision.hit && collision.distance <= 0.4f)
             {
+                // Calculate the new position after collision
+                ballPosition = Vector3Add(ballPosition, Vector3Scale(collision.normal, 0.4f - collision.distance));
+                // tell it to not have gravity while resting on object
                 collided = true;
-                ballProjection = Vector3Project(ballVelocity, collision.normal);
-                // THEORY: projection - (projection - original)
-                ballVelocity = Vector3Subtract(Vector3Subtract(ballVelocity, ballProjection),ballProjection);
+                // calculate reflected velocity (projection - (projection - velocity) right?
+                ballVelocity = Vector3Reflect(ballVelocity, collision.normal);
+                ballVelocity.y *= 0.8f;
                 vec3mulfeq(ballVelocity, 0.8f);
             }
         }
@@ -269,8 +271,12 @@ int main()
         {
             ballVelocity.z = 10;
         }
+        // Update ball rotation based on velocity, angular velocity = linear velocity / radius
+        ballAngularVelocity = Vector3(Vector3Length(ballVelocity) / 0.4f, Vector3Length(ballVelocity) / 0.4f, Vector3Length(ballVelocity) / 0.4f);
+        vec3addeq(ballRotation, ballAngularVelocity);
+        ball.transform = MatrixRotateXYZ(ballRotation);
         // finally add velocity to overall position of ball
-        vec3addeq(ballPosition, ballVelocity);
+        vec3addeq(ballPosition, Vector3Scale(ballVelocity,deltaTime));
 
     }
 

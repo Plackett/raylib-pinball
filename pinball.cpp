@@ -81,8 +81,9 @@ int main()
     Mesh boardMesh = GenMeshCube(40, 20, 1);
     Mesh ballMesh = GenMeshSphere(0.4f, 32, 32);
     Mesh Arrow = GenMeshCone(1, 3, 32);
-    Mesh backWallMesh = GenMeshCube(20, 2, 2);
-    Mesh wallMesh = GenMeshCube(1, 2, 40);
+    Mesh backWallMesh = GenMeshCube(20, 3, 2);
+    Mesh funnelMesh = GenMeshCube(10, 3, 2);
+    Mesh wallMesh = GenMeshCube(1, 3, 40);
 
     // model creation
     Model flipper_L = LoadModel("./assets/flipper_L.glb");
@@ -91,6 +92,8 @@ int main()
     Model ball = LoadModelFromMesh(ballMesh);
     Model backWall = LoadModelFromMesh(backWallMesh);
     Model frontWall = LoadModelFromMesh(backWallMesh);
+    Model leftFunnel = LoadModelFromMesh(funnelMesh);
+    Model rightFunnel = LoadModelFromMesh(funnelMesh);
     Model leftWall = LoadModelFromMesh(wallMesh);
     Model rightWall = LoadModelFromMesh(wallMesh);
 
@@ -108,15 +111,18 @@ int main()
 
     // rotation and positioning
     board.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 90*DEG2RAD));
-    backWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * BOARD_TILT, 0.0f, 0.0f));
+    leftFunnel.transform = MatrixRotateXYZ(Vector3(DEG2RAD * BOARD_TILT, 30 * DEG2RAD,0));
+    leftFunnel.transform = MatrixMultiply(leftFunnel.transform, MatrixTranslate(6, -1, 11.5f));
+    rightFunnel.transform = MatrixRotateXYZ(Vector3(DEG2RAD * BOARD_TILT, -30 * DEG2RAD, 0));
+    rightFunnel.transform = MatrixMultiply(rightFunnel.transform, MatrixTranslate(-6, -1, 11.5f));
     flipper_L.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
     flipper_R.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (90 + BOARD_TILT), 0.0f, 0.0f));
-    backWall.transform = MatrixTranslate(0, -1, 16);
-    frontWall.transform = MatrixTranslate(0, 4, -20);
+    backWall.transform = MatrixTranslate(0, 0, 16);
+    frontWall.transform = MatrixTranslate(0, 5, -20);
     leftWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (BOARD_TILT), 0, 0));
-    leftWall.transform = MatrixMultiply(leftWall.transform,MatrixTranslate(-10, 0, -1));
+    leftWall.transform = MatrixMultiply(leftWall.transform,MatrixTranslate(-10, 1, -1));
     rightWall.transform = MatrixRotateXYZ(Vector3(DEG2RAD * (BOARD_TILT), 0, 0));
-    rightWall.transform = MatrixMultiply(leftWall.transform, MatrixTranslate(20, 0, -1));
+    rightWall.transform = MatrixMultiply(leftWall.transform, MatrixTranslate(20, 1, -1));
     flipper_L.transform = MatrixTranslate(-1, -1, 0);
     flipper_R.transform = MatrixTranslate(1, -1, 0);
 
@@ -140,7 +146,7 @@ int main()
     XRay.direction = Vector3(1, 0, 0);
     Ray NegXRay{};
     NegXRay.direction = Vector3(-1, 0, 0);
-    static RayCollision collisions[7];
+    static RayCollision collisions[9];
     time_t dropTime = 0;
     bool collided = false;
 
@@ -155,6 +161,8 @@ int main()
         {
             ballPosition = Vector3(-1, 1, 0);
             ballVelocity = Vector3Zero();
+            ballRotation = Vector3Zero();
+            ballAngularVelocity = Vector3Zero();
         }
         // flipper controls
         if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT))
@@ -215,6 +223,8 @@ int main()
         BeginShaderMode(shader);
         DrawModel(board, Vector3(0,0,-5), 1.0f, BROWN);
         DrawModel(backWall, Vector3Zero(), 1, GRAY);
+        DrawModel(leftFunnel, Vector3Zero(), 1, GRAY);
+        DrawModel(rightFunnel, Vector3Zero(), 1, GRAY);
         DrawModel(frontWall, Vector3Zero(), 1, GRAY);
         DrawModel(leftWall, Vector3Zero(), 1, GRAY);
         DrawModel(rightWall, Vector3Zero(), 1, GRAY);
@@ -258,6 +268,8 @@ int main()
         collisions[4] = GetRayCollisionMesh(NegZRay, backWallMesh, frontWall.transform);
         collisions[5] = GetRayCollisionMesh(XRay, wallMesh, rightWall.transform);
         collisions[6] = GetRayCollisionMesh(NegXRay, wallMesh, leftWall.transform);
+        collisions[7] = GetRayCollisionMesh(ZRay, funnelMesh, leftFunnel.transform);
+        collisions[8] = GetRayCollisionMesh(ZRay, funnelMesh, rightFunnel.transform);
 
         // cancel gravity if touching object
         if (!collided)
@@ -269,8 +281,24 @@ int main()
         {
             collided = false;
         }
+        // test if above ground, reset if now
+        if (!collisions[0].hit)
+        {
+            ballPosition = Vector3(1, 1, 0);
+            ballVelocity = Vector3Zero();
+            ballRotation = Vector3Zero();
+            ballAngularVelocity = Vector3Zero();
+        }
+        // test if hit back wall, reset if now
+        if (collisions[1].hit && collisions[1].distance <= 0.4f)
+        {
+            ballPosition = Vector3(-1, 1, 0);
+            ballVelocity = Vector3Zero();
+            ballRotation = Vector3Zero();
+            ballAngularVelocity = Vector3Zero();
+        }
         // apply physics based on collision
-        for (int i = 0; i < 7; ++i)
+        for (int i = 0; i < 9; ++i)
         {
             // 0.4 is radius of the ball
             if (collisions[i].hit && collisions[i].distance <= 0.4f)
